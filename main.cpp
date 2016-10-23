@@ -5,8 +5,42 @@
 #include <cstring>
 #include <vector>
 #include <sstream>
+#include <cstdlib>
+#include <ctime>
+#include <sys/socket.h>
+#include <cstdlib>
+#include <unistd.h>
+#include <netdb.h>
+#include <arpa/inet.h>
 
 using namespace std;
+
+int sockfd = -1; // Used to store the socket file descriptor, used for cleanup, -1 for sockfd not initialized
+
+void self_exit(int exitcode)
+{
+    if (sockfd != -1)
+    {
+        // Need to close sockfd
+        close(sockfd);
+    }
+    exit(exitcode);
+}
+
+string tolower(string src)
+{
+    // Helper function that converts a string to lowercase
+    string res = "";
+    unsigned int len_src = src.length();
+    for (unsigned int i = 0; i < len_src;i++)
+    {
+        if ((src[i] >= 'A') && (src[i] <= 'Z'))
+            res += (src[i] + 'a' - 'A');
+        else
+            res += src[i];
+    }
+    return res;
+}
 
 void commandline_error_message()
 {
@@ -20,16 +54,24 @@ void chainfile_error_message()
     cerr << "Error reading the chain file. Please check chain file format." << endl;
 }
 
-int parse_first_line(string line)
+int parse_nonnegative_int(string input)
 {
+    if (input.length() == 0)
+        return -1;
     int num = 0;
-    for (int i = 0; i < line.length(); i++)
+    for (int i = 0; i < input.length(); i++)
     {
-        if ((line[i] > '9') || (line[i] < '0'))
+        if ((input[i] > '9') || (input[i] < '0'))
             return -1;
         num *= 10;
-        num += (line[i] - '0') ;
+        num += (input[i] - '0') ;
     }
+    return num;
+}
+
+int parse_first_line(string line)
+{
+    int num = parse_nonnegative_int(line);
     if (num == 0)
         return -1;
     return num;
@@ -37,16 +79,7 @@ int parse_first_line(string line)
 
 int parse_ip_segment(string line)
 {
-    if (line.length() == 0)
-        return -1;
-    int num = 0;
-    for (int i = 0; i < line.length(); i++)
-    {
-        if ((line[i] > '9') || (line[i] < '0'))
-            return -1;
-        num *= 10;
-        num += (line[i] - '0') ;
-    }
+    int num = parse_nonnegative_int(line);
     if (num > 255)
         return -1;
     return 0;
@@ -56,6 +89,8 @@ int validate_ip(string ip)
 {
     if (ip.length() > 15)
         return -1;
+    if (tolower(ip) == "localhost")
+        return 0;
     char ip_str[16];
     strcpy(ip_str, ip.c_str());
     char* token = strtok(ip_str, ".");
@@ -82,16 +117,7 @@ int validate_ip(string ip)
 
 int validate_port(string port)
 {
-    if (port.length() == 0)
-        return -1;
-    int num = 0;
-    for (int i = 0; i < port.length(); i++)
-    {
-        if ((port[i] > '9') || (port[i] < '0'))
-            return -1;
-        num *= 10;
-        num += (port[i] - '0') ;
-    }
+    int num = parse_nonnegative_int(port);
     if (num > 65535)
         return -1;
     return 0;
@@ -182,6 +208,66 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
     return 0;
 }
 
+int process_sending_receving(string url, vector<string> stepstones)
+{
+    int num_of_stepstones = stepstones.size();
+
+    // Select random stepstone
+    srand(time(NULL));
+    int selected = rand() % num_of_stepstones;
+
+    vector<string>::iterator iter = stepstones.begin();
+    for (int i = 0; i < selected; i ++)
+        iter++;
+
+    string ip_port = *iter;
+    stepstones.erase(iter);
+
+    // Get IP and port from string
+    char temp[22];
+    strcpy(temp, ip_port.c_str());
+
+    string ip(strtok(temp, ":"));
+    string portstr(strtok(NULL, ":"));
+
+    int port = parse_nonnegative_int(portstr);
+
+    // Start creating socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        // Failed to get file descriptor
+        cout << "Error: Failed to get socket/file descriptor. Program will now terminate." << endl;
+        self_exit(-1);
+    }
+
+    // Create struct sockaddr_in
+    struct sockaddr_in server_address;
+    memset(&server_address,0,sizeof(server_address)); // Initialize localAddress (with all zero)
+
+    // Prepare the IP
+    inet_pton(AF_INET, ip.c_str(), &(server_address.sin_addr));
+
+    // Prepare the port number
+    uint16_t portnumber = (uint16_t) port; // port should be between 0 and 65535, so conversion is safe
+    uint16_t network_portnumber = htons(portnumber); // Convert port number into network byte order
+
+    // Prepare the struct sockaddr_in
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = network_portnumber;
+
+    // Start to connect
+    int ret = connect(sockfd, (struct sockaddr*)&server_address, sizeof(server_address));
+
+    if (ret == -1)
+    {
+        cerr << "Error: Failed to connect. Program will now terminate." << endl;
+        self_exit(1);
+    }
+
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     if ((argc == 2) || (argc == 4))
     {
@@ -208,8 +294,7 @@ int main(int argc, char* argv[]) {
         if (process_chain_file(chainfile, stepstones))
             return -1;
 
-
-
+        return process_sending_receving(url, stepstones);
     }
     else
     {
