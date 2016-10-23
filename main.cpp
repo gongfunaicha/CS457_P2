@@ -265,6 +265,10 @@ int process_sending_receving(string url, vector<string> stepstones)
         self_exit(1);
     }
 
+    // TODO: encode packet and send
+    // TODO: receive and reconstruct packets
+    // TODO: save the reconstructed binary to the localdisk
+
     return 0;
 }
 
