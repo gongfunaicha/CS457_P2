@@ -1,4 +1,4 @@
-// Program awget
+// Program awget by Chen Wang
 
 #include <iostream>
 #include <fstream>
