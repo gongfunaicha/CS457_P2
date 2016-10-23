@@ -21,7 +21,15 @@ void chainfile_error_message()
 
 int parse_first_line(string line)
 {
-
+    int num = 0;
+    for (int i = 0; i < line.length(); i++)
+    {
+        if ((line[i] > '9') || (line[i] < '0'))
+            return -1;
+        num *= 10;
+        num += (line[i] - '0') ;
+    }
+    return num;
 }
 
 int process_chain_file(string chainfilename, vector<string>& stepstones)
