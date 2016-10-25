@@ -15,6 +15,8 @@
 
 using namespace std;
 
+#define LENGTH_PACKET_LENGTH 2
+
 int sockfd = -1; // Used to store the socket file descriptor, used for cleanup, -1 for sockfd not initialized
 
 void self_exit(int exitcode)
@@ -263,6 +265,111 @@ int sendout(int sockfd, string url, vector<string> stepstones)
     return 0;
 }
 
+int receive(int sockfd, string& filebuffer)
+{
+    // Clear file buffer
+    filebuffer.clear();
+    int16_t length = 0;
+    char length_buffer[LENGTH_PACKET_LENGTH];
+    memset(length_buffer, 0, LENGTH_PACKET_LENGTH);
+    ssize_t ret = recv(sockfd, length_buffer, LENGTH_PACKET_LENGTH, 0);
+    if (ret == -1)
+    {
+        cout << "Error: Failed to receive length. Program will now terminate." << endl;
+        self_exit(1);
+    }
+
+    memcpy(&length, length_buffer, LENGTH_PACKET_LENGTH);
+    if (length < 0)
+    {
+        cerr << "Wget terminated with error code " << -length << endl;
+        cerr << "No file is transferred. Program will now terminate." << endl;
+        self_exit(-length);
+    }
+    else if (length == 0)
+    {
+        cerr << "Invalid length received, program will now terminate." << endl;
+        self_exit(-1);
+    }
+
+    while (length > 0)
+    {
+        char* packet_buffer = new char[length+1];
+        memset(packet_buffer, 0, (size_t)(length + 1));
+        ssize_t ret1 = recv(sockfd, packet_buffer, (size_t)length, 0);
+        if (ret1 == -1)
+        {
+            cout << "Error: Failed to receive length. Program will now terminate." << endl;
+            self_exit(1);
+        }
+
+        filebuffer += string(packet_buffer);
+
+        delete(packet_buffer);
+
+        // Retrieve next length packet
+
+        memset(length_buffer, 0, LENGTH_PACKET_LENGTH);
+        ssize_t ret2 = recv(sockfd, length_buffer, LENGTH_PACKET_LENGTH, 0);
+        if (ret2 == -1)
+        {
+            cout << "Error: Failed to receive length. Program will now terminate." << endl;
+            self_exit(1);
+        }
+
+        memcpy(&length, length_buffer, LENGTH_PACKET_LENGTH);
+    }
+    if (length < 0)
+    {
+        // Once start transmission, length should be only non-negative
+        cerr << "Invalid length received, program will now terminate." << endl;
+        self_exit(-1);
+    }
+    return 0;
+}
+
+string extractfilename(string url)
+{
+    // Remove starting http:// and https://
+    if ((url.length() >= 7) && (url.substr(0,7) == "http://"))
+        url.erase(0,7);
+    if ((url.length() >= 8) && (url.substr(0,8) == "https://"))
+        url.erase(0,8);
+
+    // Find the last '/'
+    int i = (int)(url.length() - 1);
+    for (; i >= 0; i--)
+    {
+        if (url.at(i) == '/')
+            break;
+    }
+    if ((i == -1) || (i == (url.length()-1)))
+    {
+        // '/' not found for '/' is the last character
+        return "index.html";
+    }
+    else
+    {
+        return url.substr(i + 1, url.length() - i - 1);
+    }
+
+}
+
+int writetodisk(string url, string& filebuffer)
+{
+    string filename = extractfilename(url);
+    ofstream outfile (filename, ofstream::binary);
+    if (!outfile.is_open())
+    {
+        cerr << "Could not open output file. Program will now terminate." << endl;
+        return -1;
+    }
+    outfile.write(filebuffer.c_str(), filebuffer.length());
+    outfile.close();
+    cout << "Webpage retrieved into file: " + filename << " successfully!" << endl;
+    return 0;
+}
+
 int process_sending_receving(string url, vector<string> stepstones)
 {
     int num_of_stepstones = stepstones.size();
@@ -322,8 +429,13 @@ int process_sending_receving(string url, vector<string> stepstones)
 
     if (sendout(sockfd, url, stepstones))
         return -1;
-    // TODO: receive and reconstruct packets
-    // TODO: save the reconstructed binary to the localdisk
+
+    string filebuffer;
+    if (receive(sockfd, filebuffer))
+        return -1;
+
+    if  (writetodisk(url, filebuffer))
+        return -1;
 
     return 0;
 }
