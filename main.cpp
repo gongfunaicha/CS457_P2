@@ -172,6 +172,7 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
     if (!chainfile)
     {
         chainfile_error_message();
+        chainfile.close();
         return -1;
     }
 
@@ -180,6 +181,7 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
     if (num_of_line == -1)
     {
         chainfile_error_message();
+        chainfile.close();
         return -1;
     }
 
@@ -189,12 +191,14 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
         if (!chainfile)
         {
             cerr << "Wrong number specified in the first line." << endl;
+            chainfile.close();
             return -1;
         }
         string ip_port;
         if (parse_ip_port(line, ip_port))
         {
             cerr << "Error parsing IP and port from line " << i+2 << "." << endl;
+            chainfile.close();
             return -1;
         }
         stepstones.push_back(ip_port);
@@ -206,6 +210,7 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
         if (line != "")
         {
             cerr << "Wrong number specified in the first line." << endl;
+            chainfile.close();
             return -1;
         }
     }
@@ -294,8 +299,8 @@ int receive(int sockfd, string& filebuffer)
 
     while (length > 0)
     {
-        char* packet_buffer = new char[length+1];
-        memset(packet_buffer, 0, (size_t)(length + 1));
+        char* packet_buffer = new char[length];
+        memset(packet_buffer, 0, (size_t)length);
         ssize_t ret1 = recv(sockfd, packet_buffer, (size_t)length, 0);
         if (ret1 == -1)
         {
@@ -303,7 +308,9 @@ int receive(int sockfd, string& filebuffer)
             self_exit(1);
         }
 
-        filebuffer += string(packet_buffer);
+        // Manual addition due to possible null character inside binary data
+        for (int i = 0; i < length; i++)
+            filebuffer += string.at(i);
 
         delete(packet_buffer);
 
@@ -362,9 +369,15 @@ int writetodisk(string url, string& filebuffer)
     if (!outfile.is_open())
     {
         cerr << "Could not open output file. Program will now terminate." << endl;
+        outfile.close();
         return -1;
     }
     outfile.write(filebuffer.c_str(), filebuffer.length());
+    if (!outfile)
+    {
+        cerr << "Could not write to the output file. Program will now terminate." << endl;
+        outfile.close();
+    }
     outfile.close();
     cout << "Webpage retrieved into file: " + filename << " successfully!" << endl;
     return 0;
@@ -440,10 +453,28 @@ int process_sending_receving(string url, vector<string> stepstones)
     return 0;
 }
 
+string sanitizeurl(string url)
+{
+    size_t index = url.find(';');
+    if (index == string::npos)
+    {
+        // Not found, return original string
+        return url;
+    }
+    else
+    {
+        // Found, return string before the first ';'
+        return url.substr(0, index);
+    }
+
+}
+
 int main(int argc, char* argv[]) {
     if ((argc == 2) || (argc == 4))
     {
         string url(argv[1]);
+
+        url = sanitizeurl(url);
 
         if ((argc == 4) && (strcmp("-c", argv[2]) != 0))
         {
@@ -456,8 +487,7 @@ int main(int argc, char* argv[]) {
 
         if (argc == 4)
         {
-            string temp(argv[3]);
-            chainfile = temp;
+            chainfile = string(argv[3]);
         }
 
         vector<string> stepstones;
