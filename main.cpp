@@ -200,11 +200,66 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
 
     if (!chainfile.eof())
     {
-        cerr << "Wrong number specified in the first line." << endl;
-        return -1;
+        getline(chainfile, line);
+        if (line != "")
+        {
+            cerr << "Wrong number specified in the first line." << endl;
+            return -1;
+        }
     }
 
     chainfile.close();
+    return 0;
+}
+
+int sendout(int sockfd, string url, vector<string> stepstones)
+{
+    // Send out url
+    url = "U: " + url;
+    ssize_t ret = send(sockfd, url.c_str(), url.length() + 1, 0);
+    if (ret == -1)
+    {
+        cerr << "Error: Failed to send out url. Program will now terminate.";
+        self_exit(1);
+    }
+
+    // Send out each step stone ip and port
+    vector<string>::iterator iter = stepstones.begin();
+
+    if (stepstones.size() == 0)
+    {
+        // No Port IP pair to send
+        string msgtosend = "P:**";
+        ssize_t ret = send(sockfd, msgtosend.c_str(), msgtosend.length() + 1, 0);
+
+        if (ret == -1)
+        {
+            cerr << "Error: Failed to send out ip_port pair. Program will now terminate.";
+            self_exit(1);
+        }
+        return 0;
+    }
+
+    // Have Port IP pair to send
+    while (iter != stepstones.end())
+    {
+        char temp[22];
+        strcpy(temp, (*iter).c_str());
+        string ip(strtok(temp, ":"));
+        string portstr(strtok(NULL, ":"));
+
+        string msgtosend = "P: " + portstr + " S: " + ip + " /P";
+
+        ssize_t ret = send(sockfd, msgtosend.c_str(), msgtosend.length() + 1, 0);
+
+        if (ret == -1)
+        {
+            cerr << "Error: Failed to send out ip_port pair. Program will now terminate.";
+            self_exit(1);
+        }
+
+        iter++;
+    }
     return 0;
 }
 
@@ -265,7 +320,8 @@ int process_sending_receving(string url, vector<string> stepstones)
         self_exit(1);
     }
 
-    // TODO: encode packet and send
+    if (sendout(sockfd, url, stepstones))
+        return -1;
     // TODO: receive and reconstruct packets
     // TODO: save the reconstructed binary to the localdisk
 
