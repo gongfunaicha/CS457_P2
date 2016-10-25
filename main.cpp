@@ -153,6 +153,8 @@ int parse_ip_port(string line, string& ip_port)
     ip_port += ':';
     ip_port += port;
 
+    cout << ip << ", " << port << endl;
+
     return 0;
 }
 
@@ -184,6 +186,8 @@ int process_chain_file(string chainfilename, vector<string>& stepstones)
         chainfile.close();
         return -1;
     }
+
+    cout << "chainlist is" << endl;
 
     for (int i = 0; i < num_of_line; i++)
     {
@@ -267,6 +271,8 @@ int sendout(int sockfd, string url, vector<string> stepstones)
 
         iter++;
     }
+    // All sent out, waiting for response
+    cout << "waiting for file..." << endl;
     return 0;
 }
 
@@ -379,7 +385,7 @@ int writetodisk(string url, string& filebuffer)
         outfile.close();
     }
     outfile.close();
-    cout << "Webpage retrieved into file: " + filename << " successfully!" << endl;
+    cout << "Received file " + filename << endl;
     return 0;
 }
 
@@ -404,6 +410,8 @@ int process_sending_receving(string url, vector<string> stepstones)
 
     string ip(strtok(temp, ":"));
     string portstr(strtok(NULL, ":"));
+
+    cout << "next SS is " << ip << ", " << portstr << endl;
 
     int port = parse_nonnegative_int(portstr);
 
@@ -450,6 +458,8 @@ int process_sending_receving(string url, vector<string> stepstones)
     if  (writetodisk(url, filebuffer))
         return -1;
 
+    cout << "Goodbye!" << endl;
+
     return 0;
 }
 
@@ -464,6 +474,7 @@ string sanitizeurl(string url)
     else
     {
         // Found, return string before the first ';'
+        cout << "Invalid character found in url. Truncated url for safety" << endl;
         return url.substr(0, index);
     }
 
@@ -475,6 +486,8 @@ int main(int argc, char* argv[]) {
         string url(argv[1]);
 
         url = sanitizeurl(url);
+
+        cout << "Request: " + url + "..." << endl;
 
         if ((argc == 4) && (strcmp("-c", argv[2]) != 0))
         {
