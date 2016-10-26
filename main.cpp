@@ -271,6 +271,15 @@ int sendout(int sockfd, string url, vector<string> stepstones)
 
         iter++;
     }
+    // Send out EOF
+    ssize_t retu = send(sockfd, "EOF", 3, 0);
+
+    if (retu == -1)
+    {
+        cerr << "Error: Failed to send out ip_port pair. Program will now terminate.";
+        self_exit(1);
+    }
+
     // All sent out, waiting for response
     cout << "waiting for file..." << endl;
     return 0;
