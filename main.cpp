@@ -325,9 +325,9 @@ int receive(int sockfd, string& filebuffer)
 
         // Manual addition due to possible null character inside binary data
         for (int i = 0; i < length; i++)
-            filebuffer += string.at(i);
+            filebuffer += packet_buffer[i];
 
-        delete(packet_buffer);
+        delete[] packet_buffer;
 
         // Retrieve next length packet
 
